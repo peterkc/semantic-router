@@ -1,0 +1,141 @@
+version: v0.5
+
+listeners:
+  - name: inference
+    address: 127.0.0.1
+    port: 8899
+    api_keys: ["${SR_CLIENT_KEY}"]
+    apis:
+      responses:
+        models: [gpt-auto]
+      messages:
+        models: [claude-auto]
+
+providers:
+  models:
+    - name: gpt-6.2-sol
+      api_format: responses
+      context_window_size: 500000
+      max_output_tokens: 128000
+      capabilities: [chat, reasoning, tools, vision, long_context]
+      reasoning:
+        family: gpt-6-astra
+      backend_refs:
+        - name: codex-lb
+          provider: openai-compatible
+          endpoint: "${CODEX_LB_BASE_URL}"
+          api_key: "${CODEX_LB_API_KEY}"
+    - name: gpt-6.2-astra
+      api_format: responses
+      context_window_size: 272000
+      max_output_tokens: 128000
+      capabilities: [chat, reasoning, tools, vision, long_context]
+      reasoning:
+        family: gpt-6-astra
+      backend_refs:
+        - name: codex-lb
+          provider: openai-compatible
+          endpoint: "${CODEX_LB_BASE_URL}"
+          api_key: "${CODEX_LB_API_KEY}"
+    - name: gpt-6-luna
+      api_format: responses
+      context_window_size: 272000
+      max_output_tokens: 128000
+      capabilities: [chat, reasoning, tools, vision, long_context]
+      reasoning:
+        family: gpt-6-astra
+      backend_refs:
+        - name: codex-lb
+          provider: openai-compatible
+          endpoint: "${CODEX_LB_BASE_URL}"
+          api_key: "${CODEX_LB_API_KEY}"
+    - name: claude-opus-5-5
+      api_format: messages
+      context_window_size: 1000000
+      max_output_tokens: 128000
+      capabilities: [chat, reasoning, tools, vision, long_context]
+      reasoning:
+        family: claude-effort-adaptive
+      backend_refs:
+        - name: meridian
+          provider: anthropic-compatible
+          endpoint: "${MERIDIAN_BASE_URL}"
+          api_key: "${MERIDIAN_API_KEY}"
+          headers:
+            x-meridian-agent: prime
+    - name: claude-fable-5-2
+      api_format: messages
+      context_window_size: 1000000
+      max_output_tokens: 128000
+      capabilities: [chat, reasoning, tools, vision, long_context]
+      reasoning:
+        family: claude-effort-always-on
+      backend_refs:
+        - name: meridian
+          provider: anthropic-compatible
+          endpoint: "${MERIDIAN_BASE_URL}"
+          api_key: "${MERIDIAN_API_KEY}"
+          headers:
+            x-meridian-agent: prime
+
+entrypoints:
+  - model_names: [gpt-auto]
+    recipe: gpt-auto
+    default: true
+  - model_names: [claude-auto]
+    recipe: claude-auto
+
+recipes:
+  - name: gpt-auto
+    candidate_requirements:
+      capabilities: declared
+      context: known_limits
+    decisions:
+      - name: gpt-auto-default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-6.2-sol
+            use_reasoning: true
+            reasoning_effort: high
+        algorithm:
+          type: static
+  - name: claude-auto
+    candidate_requirements:
+      capabilities: declared
+      context: known_limits
+    decisions:
+      - name: claude-auto-default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: claude-opus-5-5
+            use_reasoning: true
+            reasoning_effort: high
+            reasoning_mode: adaptive
+        algorithm:
+          type: static
+
+global:
+  router:
+    learning:
+      enabled: false
+      protection:
+        enabled: false
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      store_backend: memory
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        prompt_capture: none
+        capture_request_body: false
+        capture_response_body: false
+        capture_tool_results: false
