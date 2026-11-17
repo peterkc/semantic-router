@@ -93,6 +93,8 @@ recipes:
     decisions:
       - name: gpt-auto-default
         priority: 1
+        retention:
+          drop: true
         rules:
           operator: AND
           conditions: []
@@ -109,6 +111,8 @@ recipes:
     decisions:
       - name: claude-auto-default
         priority: 1
+        retention:
+          drop: true
         rules:
           operator: AND
           conditions: []
@@ -141,7 +145,10 @@ global:
       profiling:
         enabled: false
     response_api:
-      enabled: false
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
     router_replay:
       store_backend: memory
   plugins:
