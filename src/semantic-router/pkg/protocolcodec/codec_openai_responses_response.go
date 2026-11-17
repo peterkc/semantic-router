@@ -294,7 +294,9 @@ const responsesItemMetadataReason = "response item metadata has no protocol-neut
 // responsesItemMetadataFields names the output item metadata that the neutral
 // contract cannot carry. Buffered and streamed replies drop the same set.
 func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
+	_, phaseErr := decodeResponsesPhase(item.Phase)
 	return map[string]bool{
+		"output.phase":  phaseErr != nil,
 		"output.async":  len(item.Async) > 0,
 		"output.caller": len(item.Caller) > 0,
 		"output.status": item.Status != "" && item.Type != "image_generation_call",
@@ -366,7 +368,8 @@ func decodeResponsesMessageOutput(
 	if responsesContentFieldPresent(item.Content, "logprobs") {
 		appendProviderFieldOmission(diagnostics, policy, llmprotocol.OpenAIResponsesV1, "output.content.logprobs", "token log probabilities have no protocol-neutral representation")
 	}
-	output.Role, output.Content, output.ResponsesPhase = role, content, item.Phase
+	output.Role, output.Content = role, content
+	output.ResponsesPhase, _ = decodeResponsesPhase(item.Phase) // Malformed phase was diagnosed with item metadata.
 	return output, nil
 }
 

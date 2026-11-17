@@ -38,6 +38,7 @@ type semanticResponseStreamState struct {
 type semanticStreamItem struct {
 	id               string
 	role             llmprotocol.Role
+	phase            string
 	text             string
 	refusal          string
 	reasoning        string
@@ -384,6 +385,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			item := state.item(event.ItemIndex)
 			item.id = event.ItemID
 			item.role = event.Role
+			item.phase = event.ResponsesPhase
 			if event.ToolCall != nil {
 				call := *event.ToolCall
 				item.toolCall = &call
@@ -443,6 +445,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 		case llmprotocol.EventOutputItemCompleted:
 			item := state.item(event.ItemIndex)
 			item.completed = true
+			if event.ResponsesPhase != "" {
+				item.phase = event.ResponsesPhase
+			}
 			if event.ToolCall != nil {
 				call := *event.ToolCall
 				item.toolCall = &call
@@ -528,7 +533,7 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if itemID == "" {
 			itemID = fmt.Sprintf("item_%d", index)
 		}
-		output = append(output, llmprotocol.OutputItem{ID: itemID, Role: item.role, Content: contents})
+		output = append(output, llmprotocol.OutputItem{ID: itemID, Role: item.role, Content: contents, ResponsesPhase: item.phase})
 	}
 	if state.stop == "" {
 		state.stop = llmprotocol.StopUnknown

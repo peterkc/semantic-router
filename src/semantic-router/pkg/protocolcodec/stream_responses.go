@@ -292,7 +292,7 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	if len(wire.Item) > 0 {
 		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
 			prefixedUnknownFieldPaths("output[]", responsesItemUnknownFields(wire.Item, decoder.policy)))
-		decoder.appendProviderFieldsOnce(&diagnostics, responsesItemMetadataDiagnostics(wire.Item, decoder.policy))
+		decoder.appendProviderFieldsOnce(&diagnostics, responsesItemMetadataDiagnostics(wire.Item, decoder.policy, decoder.context.Target))
 	}
 	if wire.Response != nil {
 		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
@@ -329,7 +329,7 @@ func (decoder *responsesStreamDecoder) appendProviderFieldsOnce(
 // responsesItemMetadataDiagnostics reports the item metadata a streamed item
 // loses, as the buffered decoder does. A malformed item reports nothing here;
 // the event's own validation rejects it.
-func responsesItemMetadataDiagnostics(body json.RawMessage, policy llmprotocol.Policy) llmprotocol.Diagnostics {
+func responsesItemMetadataDiagnostics(body json.RawMessage, policy llmprotocol.Policy, target llmprotocol.WireFormat) llmprotocol.Diagnostics {
 	var item responsesItemWire
 	if json.Unmarshal(body, &item) != nil {
 		return nil
@@ -337,6 +337,11 @@ func responsesItemMetadataDiagnostics(body json.RawMessage, policy llmprotocol.P
 	var diagnostics llmprotocol.Diagnostics
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1,
 		responsesItemMetadataFields(item), responsesItemMetadataReason)
+	if target != "" && target != llmprotocol.OpenAIResponsesV1 {
+		if phase, _ := decodeResponsesPhase(item.Phase); phase != "" {
+			diagnostics = appendDiagnostics(diagnostics, responsesPhaseOmission(target, "output.phase"), policy.Limits.Diagnostics)
+		}
+	}
 	return diagnostics
 }
 

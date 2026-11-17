@@ -84,7 +84,40 @@ func TestPrimeResponsesStreamPhase(t *testing.T) {
 	require.Equal(t, []string{"response.output_item.added:commentary", "response.output_item.done:commentary", "response.completed:commentary"}, phases)
 }
 
+func TestResponsesPhaseDiagnosesCrossFormatLoss(t *testing.T) {
+	engine := NewBuiltinEngine()
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		t.Run(string(target), func(t *testing.T) {
+			requestBody := []byte(`{"model":"m","input":[` + primeResponsesPhaseItem + `,{"role":"user","content":"next"}]}`)
+			request, err := engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, target, requestBody, nil)
+			require.NoError(t, err)
+			assertDroppedFields(t, request.Diagnostics, "input[].phase")
+			require.NotContains(t, string(request.Body), `"phase"`)
+
+			responseBody := []byte(`{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m","output":[` + primeResponsesPhaseItem + `],"error":null,"incomplete_details":null}`)
+			response, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, target, responseBody, nil)
+			require.NoError(t, err)
+			assertDroppedFields(t, response.Diagnostics, "output.phase")
+			require.NotContains(t, string(response.Body), `"phase"`)
+		})
+	}
+}
+
+func TestResponsesMalformedUpstreamPhaseIsDropped(t *testing.T) {
+	item := strings.Replace(primeResponsesPhaseItem, `"final_answer"`, `17`, 1)
+	body := []byte(`{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m","output":[` + item + `],"error":null,"incomplete_details":null}`)
+	result, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1, body, func(response *llmprotocol.Response) error {
+		response.Model = "public"
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotContains(t, string(result.Body), `"phase"`)
+	assertDroppedFields(t, result.Diagnostics, "output.phase")
+}
+
 func TestResponsesPhaseRejectsWrongRoleOrType(t *testing.T) {
+	_, _, _, err := NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, []byte(`{"model":"m","input":[{"type":"message","role":"user","phase":"commentary","content":"bad"}]}`))
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_input_phase")
 	for _, item := range []string{
 		`{"type":"message","role":"assistant","phase":true,"content":"bad"}`,
 		`{"type":"reasoning","phase":"commentary","summary":[]}`,

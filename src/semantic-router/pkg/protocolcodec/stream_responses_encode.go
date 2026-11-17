@@ -156,9 +156,9 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	item := responsesItemWire{Type: string(kind), ID: id, Status: "in_progress"}
 	switch kind {
 	case responsesOutputMessage:
-		item.Role, item.Phase = "assistant", event.ResponsesPhase
-		if item.Phase != "" {
-			encoder.messagePhases[key] = item.Phase
+		item.Role, item.Phase = "assistant", encodeResponsesPhase(event.ResponsesPhase)
+		if event.ResponsesPhase != "" {
+			encoder.messagePhases[key] = event.ResponsesPhase
 		}
 	case responsesOutputTool:
 		item.Type = "function_call"

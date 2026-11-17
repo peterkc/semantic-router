@@ -100,7 +100,6 @@ type responseAccumulator struct {
 }
 
 type responseAccumulatorItem struct {
-	phase    string
 	id       string
 	role     llmprotocol.Role
 	contents map[int]*llmprotocol.Content
@@ -224,7 +223,7 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 	if _, found := accumulator.items[event.ItemIndex]; found {
 		return fmt.Errorf("neutral stream item %d started twice", event.ItemIndex)
 	}
-	item := &responseAccumulatorItem{id: event.ItemID, role: event.Role, phase: event.ResponsesPhase, contents: make(map[int]*llmprotocol.Content)}
+	item := &responseAccumulatorItem{id: event.ItemID, role: event.Role, contents: make(map[int]*llmprotocol.Content)}
 	if item.role == "" {
 		item.role = llmprotocol.RoleAssistant
 	}
@@ -372,9 +371,6 @@ func (accumulator *responseAccumulator) completeItem(event llmprotocol.Event) er
 	if event.Role != "" {
 		item.role = event.Role
 	}
-	if event.ResponsesPhase != "" {
-		item.phase = event.ResponsesPhase
-	}
 	if event.ToolCall != nil {
 		call := *event.ToolCall
 		item.call = &call
@@ -425,7 +421,7 @@ func (accumulator *responseAccumulator) response() (llmprotocol.Response, error)
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
 		}
 		accumulator.result.Output = append(accumulator.result.Output, llmprotocol.OutputItem{
-			ID: item.id, Role: item.role, Content: contents, ResponsesPhase: item.phase,
+			ID: item.id, Role: item.role, Content: contents,
 		})
 	}
 	return accumulator.result, nil

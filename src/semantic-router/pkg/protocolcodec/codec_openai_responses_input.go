@@ -252,8 +252,14 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 			nil,
 		)
 	}
-	if item.Phase != "" && role != llmprotocol.RoleAssistant {
-		return rejectUnsupportedRequestField("input.phase", json.RawMessage(`true`))
+	phase, err := decodeResponsesPhase(item.Phase)
+	if err != nil {
+		return responsesItemDecodeError(false, "phase must be a string", err)
+	}
+	if role != llmprotocol.RoleAssistant {
+		if err := rejectUnsupportedRequestField("input.phase", item.Phase); err != nil {
+			return err
+		}
 	}
 	context := responsesInputMessageContent
 	if role == llmprotocol.RoleAssistant {
@@ -266,7 +272,7 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
 		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content})
 	} else {
-		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content, ResponsesPhase: item.Phase})
+		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content, ResponsesPhase: phase})
 	}
 	return nil
 }

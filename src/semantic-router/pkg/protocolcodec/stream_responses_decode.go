@@ -108,7 +108,7 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 	event.ItemID = item.ID
 	decoder.itemTypes[responsesWireOutputIndex(wire)] = item.Type
 	event.Role = llmprotocol.RoleAssistant
-	event.ResponsesPhase = item.Phase
+	event.ResponsesPhase, _ = decodeResponsesPhase(item.Phase) // Metadata diagnostics report an invalid phase.
 	switch item.Type {
 	case "function_call", "custom_tool_call":
 		call := llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}
@@ -245,7 +245,7 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItem(
 		return err
 	}
 	event.ItemID = item.ID
-	event.ResponsesPhase = item.Phase
+	event.ResponsesPhase, _ = decodeResponsesPhase(item.Phase) // Metadata diagnostics report an invalid phase.
 	if err := decoder.applyCompletedResponseItemKind(event, wire, item); err != nil {
 		return err
 	}

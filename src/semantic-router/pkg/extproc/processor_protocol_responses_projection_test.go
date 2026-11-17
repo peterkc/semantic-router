@@ -183,10 +183,61 @@ func TestPrimeResponsesOptInClientReplay(t *testing.T) {
 	require.NoError(t, err)
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
 		projected, _ := startup.projectResponsesReasoningForBackend(request, "worker", target)
-		encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(target, projected, llmprotocol.Envelope{})
-		require.NoError(t, err)
-		require.NotContains(t, string(encoded.Body), "cipher")
-		require.NotContains(t, string(encoded.Body), `"include"`)
+		require.False(t, projected.IncludeEncryptedReasoning)
+		for _, message := range projected.Messages {
+			for _, content := range message.Content {
+				require.False(t, llmprotocol.IsResponsesReasoning(content.ReasoningDetail))
+			}
+		}
+	}
+}
+
+func TestPrimeResponsesRelayOptInFollowsBackendRef(t *testing.T) {
+	for _, enabled := range []string{"gateway", "other"} {
+		t.Run(enabled, func(t *testing.T) {
+			backendRefs := `        - name: other
+          provider: openai
+          endpoint: http://127.0.0.1:8001/v1
+`
+			document := strings.Replace(primeResponsesBackend, "%s", backendRefs, 1)
+			document = strings.Replace(document, "        - name: "+enabled+"\n", "        - name: "+enabled+"\n          allow_encrypted_reasoning_relay: true\n", 1)
+			path := filepath.Join(t.TempDir(), "router.yaml")
+			require.NoError(t, os.WriteFile(path, []byte(document), 0o600))
+			cfg, err := config.Parse(path)
+			require.NoError(t, err)
+			for _, name := range []string{"gateway", "other"} {
+				profile, err := cfg.GetProviderProfileForEndpoint("worker_" + name)
+				require.NoError(t, err)
+				require.Equal(t, enabled == name, profile.AllowEncryptedReasoningRelay, "backend %s", name)
+			}
+			assertPrimeResponsesRelay(t, &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}, false)
+		})
+	}
+}
+
+func TestPrimeResponsesStreamPreservesPhaseInReconstructedReply(t *testing.T) {
+	for _, status := range []string{"in_progress", "completed"} {
+		t.Run(status, func(t *testing.T) {
+			fixture := strings.ReplaceAll(string(extProcStreamFixture(llmprotocol.OpenAIResponsesV1)),
+				`"role":"assistant","status":"`+status+`"`, `"role":"assistant","phase":"commentary","status":"`+status+`"`)
+			ctx := &RequestContext{
+				SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1,
+				RequestModel: "public-model", TraceContext: t.Context(),
+			}
+			require.NoError(t, (&OpenAIRouter{}).ensureSemanticResponseStream(ctx))
+			client := pushExtProcStreamFixture(t, ctx, []byte(fixture))
+			semantic, err := ctx.SemanticStreamState.response()
+			require.NoError(t, err)
+			require.Len(t, semantic.Output, 1)
+			require.Equal(t, "commentary", semantic.Output[0].ResponsesPhase)
+			for _, line := range strings.Split(client.String(), "\n") {
+				if strings.HasPrefix(line, "data: ") && strings.Contains(line, `"type":"response.output_item.done"`) {
+					require.Contains(t, line, `"phase":"commentary"`)
+					return
+				}
+			}
+			t.Fatal("missing rebuilt item completion")
+		})
 	}
 }
 

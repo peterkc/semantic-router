@@ -123,6 +123,7 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, format)
 	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, verbosityDiagnostics, engine.policy.Limits.Diagnostics)
+	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, responsesRequestPhaseOmissions(projected, format), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(projected)); err != nil {
 		return RequestResult{Request: projected, Envelope: envelope, Diagnostics: projectionDiagnostics}, err
 	}
@@ -144,6 +145,7 @@ func (engine *Engine) EncodeResponse(format llmprotocol.WireFormat, response llm
 	diagnostics := projectReasoningContinuity(envelope.Format, format, pair.buffered.Capabilities(), &response)
 	diagnostics = appendDiagnostics(diagnostics,
 		projectReasoningSignature(engine.policy, envelope.Format, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, responsesOutputPhaseOmissions(response, format), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -184,6 +186,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	request, projectionDiagnostics = llmprotocol.ProjectTextVerbosity(request, target)
 	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, responsesRequestPhaseOmissions(request, target), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredCapabilities(request)); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -228,6 +231,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	diagnostics = appendDiagnostics(diagnostics,
 		projectReasoningSignature(engine.policy, source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics, projectToolCallNamespaces(source, target, &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, responsesOutputPhaseOmissions(response, target), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}

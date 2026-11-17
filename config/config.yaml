@@ -172,7 +172,8 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           weight: 100
-          # Set true only for a trusted Responses backend that can replay OpenAI ciphertext.
+          # Apply the OpenAI-hosted projection only to a trusted Responses backend.
+          # It relays encrypted state and drops unsigned plaintext-only reasoning items.
           allow_encrypted_reasoning_relay: false
     - name: gateway-routed-reference
       provider_model_id: gateway-routed-reference

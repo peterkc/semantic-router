@@ -160,7 +160,8 @@ type CanonicalBackendRef struct {
 	// roots, server_name the endpoint's host, and cert_file with key_file
 	// present a client certificate. Verification is never skipped.
 	TLS *DeploymentTLS `yaml:"tls,omitempty"`
-	// AllowEncryptedReasoningRelay trusts this backend with opaque Responses reasoning state.
+	// AllowEncryptedReasoningRelay applies the OpenAI-hosted projection to this backend:
+	// it relays opaque Responses reasoning state and drops unsigned plaintext-only reasoning items.
 	AllowEncryptedReasoningRelay bool `yaml:"allow_encrypted_reasoning_relay,omitempty"`
 }
 

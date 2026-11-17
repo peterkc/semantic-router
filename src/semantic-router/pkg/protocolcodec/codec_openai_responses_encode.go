@@ -326,7 +326,7 @@ func (state *responsesMessageEncodingState) flushOrdinary() error {
 	}
 	item := responsesItemWire{
 		Type: "message", ID: state.itemID("message"),
-		Role: state.role, Content: content, Phase: state.phase,
+		Role: state.role, Content: content, Phase: encodeResponsesPhase(state.phase),
 	}
 	if state.textDirection == "output" {
 		item.Status = "completed"

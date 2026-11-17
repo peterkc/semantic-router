@@ -137,7 +137,7 @@ type responsesItemWire struct {
 	Input            string          `json:"input,omitempty"`
 	Output           json.RawMessage `json:"output,omitempty"`
 	Summary          json.RawMessage `json:"summary,omitempty"`
-	Phase            string          `json:"phase,omitempty"`
+	Phase            json.RawMessage `json:"phase,omitempty"`
 	EncryptedContent json.RawMessage `json:"encrypted_content,omitempty"`
 	Result           *string         `json:"result,omitempty"`
 }

@@ -73,7 +73,7 @@ func marshalCompletedResponsesItem(
 ) (responsesItemWire, error) {
 	item := responsesItemWire{Type: "message", ID: id, Role: "assistant", Status: "completed"}
 	if outputKey.kind != responsesOutputReasoning {
-		item.Phase = phase
+		item.Phase = encodeResponsesPhase(phase)
 		content, err := json.Marshal(parts.message)
 		item.Content = content
 		return item, err
