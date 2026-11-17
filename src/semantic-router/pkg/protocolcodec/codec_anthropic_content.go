@@ -419,8 +419,8 @@ func invalidAnthropicMediaSource(message string) error {
 }
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
-	if request.ResponsesServiceTier != nil {
-		return nil, nil, rejectUnsupportedRequestField("service_tier", json.RawMessage(`true`))
+	if err := rejectResponsesServiceTier(request.ResponsesServiceTier, llmprotocol.AnthropicMessagesV1); err != nil {
+		return nil, nil, err
 	}
 	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.AnthropicMessagesV1, false)
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredCapabilities(request)); err != nil {

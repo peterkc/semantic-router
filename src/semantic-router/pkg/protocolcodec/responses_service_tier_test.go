@@ -29,6 +29,22 @@ func TestResponsesRequestServiceTierOmissionAndType(t *testing.T) {
 	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "")
 }
 
+func TestResponsesRequestServiceTierRejectsNonResponsesTargets(t *testing.T) {
+	engine := NewBuiltinEngine()
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIImagesV1} {
+		t.Run(string(target), func(t *testing.T) {
+			input := `{"model":"m","input":"draw a cat"`
+			if target == llmprotocol.OpenAIImagesV1 {
+				input += `,"tools":[{"type":"image_generation"}]`
+			}
+			result, err := engine.TranslateRequest(llmprotocol.OpenAIResponsesV1, target, []byte(input+`,"service_tier":"default"}`), nil)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_service_tier")
+			require.ErrorContains(t, err, string(target))
+			require.Empty(t, result.Body)
+		})
+	}
+}
+
 func rebuildResponsesTier(t *testing.T, suffix string) map[string]json.RawMessage {
 	t.Helper()
 	body := []byte(`{"model":"public","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"next"}]}]` + suffix + `}`)

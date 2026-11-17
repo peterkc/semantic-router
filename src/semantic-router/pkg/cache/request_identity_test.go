@@ -2,7 +2,25 @@ package cache
 
 import (
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func TestSemanticRequestIdentityWithoutServiceTierMatchesBase(t *testing.T) {
+	request := llmprotocol.Request{Model: "m", Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}},
+	}}}
+	got, err := BuildSemanticRequestIdentity(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Captured from the base before ResponsesServiceTier was added.
+	const exact = "0879b4eec1604f10a2840ee999c02529d0f08cedcb36965405204822a4262839"
+	const compatibility = "a7e97e0329be3e523c7732279e0717e24ffe5618df0183377d1e7897d3004d70"
+	if got.ExactFingerprint != exact || got.CompatibilityFingerprint != compatibility {
+		t.Fatalf("tierless fingerprints changed: exact %q, compatibility %q", got.ExactFingerprint, got.CompatibilityFingerprint)
+	}
+}
 
 func TestBuildRequestIdentitySeparatesStreamingResponseMode(t *testing.T) {
 	base := []byte(`{"model":"m","messages":[{"role":"user","content":"hello"}],"temperature":0.2}`)

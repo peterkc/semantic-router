@@ -294,6 +294,7 @@ type Request struct {
 	// IncludeEncryptedReasoning requests Responses encrypted continuation state.
 	IncludeEncryptedReasoning bool
 	// ResponsesServiceTier is the requested upstream service tier; nil leaves the choice to the provider.
+	// omitempty keeps cache fingerprints stable for requests without a tier.
 	ResponsesServiceTier *string `json:",omitempty"`
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether

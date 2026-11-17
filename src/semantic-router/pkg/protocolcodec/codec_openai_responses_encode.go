@@ -64,6 +64,15 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	return body, diagnostics, err
 }
 
+// rejectResponsesServiceTier keeps non-Responses encoders from dropping the requested tier.
+func rejectResponsesServiceTier(tier *string, target llmprotocol.WireFormat) error {
+	if tier == nil {
+		return nil
+	}
+	return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_service_tier",
+		string(target)+" cannot represent Responses service_tier", nil)
+}
+
 func validateResponsesEncodableRequest(request llmprotocol.Request) error {
 	if err := rejectChatOnlyControls(request); err != nil {
 		return err

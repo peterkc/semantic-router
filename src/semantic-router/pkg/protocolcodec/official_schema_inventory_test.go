@@ -103,13 +103,13 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			wire: responsesRequestWire{},
 			semantic: fields(
 				"conversation", "include", "input", "instructions", "max_output_tokens", "metadata", "model",
-				"parallel_tool_calls", "previous_response_id", "prompt_cache_key", "reasoning", "store",
+				"parallel_tool_calls", "previous_response_id", "prompt_cache_key", "reasoning", "service_tier", "store",
 				"stream", "temperature", "text", "tool_choice", "tools", "top_p", "truncation", "user",
 			),
 			unsupported: fields(
 				"background", "context_management", "max_tool_calls", "moderation", "prompt",
 				"prompt_cache_options", "prompt_cache_retention", "safety_identifier",
-				"service_tier", "top_logprobs",
+				"top_logprobs",
 			),
 			transport:  fields("stream_options"),
 			extensions: fields("auto_store"),

@@ -117,6 +117,9 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 // silently dropped, and the provider model plus b64_json response format are
 // always sent so the upstream reply matches what DecodeResponse accepts.
 func (ImagesCodec) EncodeRequest(request llmprotocol.Request, _ llmprotocol.Envelope, _ llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectResponsesServiceTier(request.ResponsesServiceTier, llmprotocol.OpenAIImagesV1); err != nil {
+		return nil, nil, err
+	}
 	if request.ImageGeneration == nil {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images wire requires a hosted image_generation request"))
 	}
