@@ -8,6 +8,9 @@ import (
 )
 
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if request.ResponsesServiceTier != nil {
+		return nil, nil, rejectUnsupportedRequestField("service_tier", json.RawMessage(`true`))
+	}
 	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.OpenAIChatV1, false)
 	for _, message := range request.Messages {
 		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, message.Content); err != nil {

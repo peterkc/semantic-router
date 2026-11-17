@@ -56,7 +56,7 @@ type responsesRequestWire struct {
 	PromptCacheRetention json.RawMessage             `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage             `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage             `json:"safety_identifier,omitempty"`
-	ServiceTier          json.RawMessage             `json:"service_tier,omitempty"`
+	ServiceTier          *string                     `json:"service_tier,omitempty"`
 	StreamOptions        *responsesStreamOptionsWire `json:"stream_options,omitempty"`
 	TopLogprobs          json.RawMessage             `json:"top_logprobs,omitempty"`
 	ClientMetadata       map[string]string           `json:"client_metadata,omitempty"`
@@ -236,7 +236,6 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 		"max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation, "prompt": wire.Prompt,
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
-		"service_tier": wire.ServiceTier,
 		"top_logprobs": wire.TopLogprobs,
 	}); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
@@ -318,6 +317,7 @@ func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]s
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
 		IncludeEncryptedReasoning: responsesRequestsEncryptedReasoning(wire.Include),
+		ResponsesServiceTier:      wire.ServiceTier,
 		Generation:                1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
 		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
 		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,

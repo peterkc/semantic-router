@@ -281,7 +281,7 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			fields: fields(
 				"background", "context_management", "max_tool_calls", "moderation", "prompt",
 				"prompt_cache_options", "prompt_cache_retention", "safety_identifier",
-				"service_tier", "top_logprobs",
+				"top_logprobs",
 			),
 		},
 		{
