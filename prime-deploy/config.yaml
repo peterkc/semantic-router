@@ -17,7 +17,7 @@ providers:
       api_format: responses
       context_window_size: 500000
       max_output_tokens: 128000
-      capabilities: [chat, reasoning, tools, vision, long_context]
+      capabilities: [chat, reasoning, tools, vision, long_context, file_input, structured_json]
       reasoning:
         family: gpt-6-astra
       backend_refs:
@@ -29,7 +29,7 @@ providers:
       api_format: responses
       context_window_size: 272000
       max_output_tokens: 128000
-      capabilities: [chat, reasoning, tools, vision, long_context]
+      capabilities: [chat, reasoning, tools, vision, long_context, file_input, structured_json]
       reasoning:
         family: gpt-6-astra
       backend_refs:
@@ -41,7 +41,7 @@ providers:
       api_format: responses
       context_window_size: 272000
       max_output_tokens: 128000
-      capabilities: [chat, reasoning, tools, vision, long_context]
+      capabilities: [chat, reasoning, tools, vision, long_context, file_input, structured_json]
       reasoning:
         family: gpt-6-astra
       backend_refs:
@@ -53,7 +53,7 @@ providers:
       api_format: messages
       context_window_size: 1000000
       max_output_tokens: 128000
-      capabilities: [chat, reasoning, tools, vision, long_context]
+      capabilities: [chat, reasoning, tools, vision, long_context, file_input, structured_json]
       reasoning:
         family: claude-effort-adaptive
       backend_refs:
@@ -67,7 +67,7 @@ providers:
       api_format: messages
       context_window_size: 1000000
       max_output_tokens: 128000
-      capabilities: [chat, reasoning, tools, vision, long_context]
+      capabilities: [chat, reasoning, tools, vision, long_context, file_input, structured_json]
       reasoning:
         family: claude-effort-always-on
       backend_refs:
@@ -127,6 +127,19 @@ global:
       protection:
         enabled: false
   services:
+    management_api:
+      bind_address: 0.0.0.0
+      port: 8080
+      auth:
+        mode: bearer
+        tokens:
+          - env: SR_MGMT_TOKEN
+            role: admin
+    observability:
+      tracing:
+        enabled: false
+      profiling:
+        enabled: false
     response_api:
       enabled: false
     router_replay:
