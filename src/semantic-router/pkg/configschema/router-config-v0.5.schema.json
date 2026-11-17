@@ -559,6 +559,9 @@
         },
         "tls": {
           "$ref": "#/$defs/DeploymentTLS"
+        },
+        "allow_encrypted_reasoning_relay": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

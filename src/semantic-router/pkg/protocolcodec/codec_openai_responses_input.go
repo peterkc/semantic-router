@@ -190,7 +190,6 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"input.async":  item.Async,
 		"input.caller": item.Caller,
-		"input.phase":  item.Phase,
 	}); err != nil {
 		return err
 	}
@@ -253,6 +252,9 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 			nil,
 		)
 	}
+	if item.Phase != "" && role != llmprotocol.RoleAssistant {
+		return rejectUnsupportedRequestField("input.phase", json.RawMessage(`true`))
+	}
 	context := responsesInputMessageContent
 	if role == llmprotocol.RoleAssistant {
 		context = responsesAssistantHistoryContent
@@ -264,7 +266,7 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
 		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content})
 	} else {
-		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content})
+		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content, ResponsesPhase: item.Phase})
 	}
 	return nil
 }

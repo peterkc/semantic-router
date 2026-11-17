@@ -226,7 +226,7 @@ func encodeResponsesMessage(message llmprotocol.Message, textDirection string) (
 	if message.Role == llmprotocol.RoleAssistant && !hasResponsesInputMedia(message.Content) {
 		contentDirection = "output"
 	}
-	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection, contentDirection: contentDirection}
+	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection, contentDirection: contentDirection, phase: message.ResponsesPhase}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
 			return nil, err
@@ -253,6 +253,7 @@ func hasResponsesInputMedia(contents []llmprotocol.Content) bool {
 type responsesMessageEncodingState struct {
 	messageID        string
 	role             string
+	phase            string
 	textDirection    string
 	contentDirection string
 	ordinary         []llmprotocol.Content
@@ -325,7 +326,7 @@ func (state *responsesMessageEncodingState) flushOrdinary() error {
 	}
 	item := responsesItemWire{
 		Type: "message", ID: state.itemID("message"),
-		Role: state.role, Content: content,
+		Role: state.role, Content: content, Phase: state.phase,
 	}
 	if state.textDirection == "output" {
 		item.Status = "completed"

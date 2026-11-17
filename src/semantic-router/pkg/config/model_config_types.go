@@ -61,6 +61,8 @@ type ProviderProfile struct {
 	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
 	// cluster and the Router's own calls use the same settings.
 	TLS *DeploymentTLS `yaml:"tls,omitempty"`
+	// AllowEncryptedReasoningRelay is materialized from the canonical backend ref.
+	AllowEncryptedReasoningRelay bool `yaml:"-"`
 }
 
 // Delegated reports whether the backend takes the requesting user's

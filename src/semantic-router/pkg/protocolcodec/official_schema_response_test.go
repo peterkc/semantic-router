@@ -422,7 +422,7 @@ func TestOfficialResponseMetadataIsExplicitlyDiagnosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDiagnosticFields(
-		t, diagnostics, "background", "conversation", "max_tool_calls", "moderation", "output.content.logprobs", "output.phase", "output_text",
+		t, diagnostics, "background", "conversation", "max_tool_calls", "moderation", "output.content.logprobs", "output_text",
 		"output.status", "prompt", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 		"safety_identifier", "service_tier", "top_logprobs", "usage.compute_units",
 	)

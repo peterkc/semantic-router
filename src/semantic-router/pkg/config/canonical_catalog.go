@@ -289,6 +289,10 @@ func appendMaterializedEndpoint(
 		modelAlias, provider.Instance.Name, endpointURL.name, bindingIndex, endpointIndex,
 	)
 	profile := materializedProviderProfile(effective, endpointURL.url)
+	// Explicit bindings retain their authored order through catalog compilation.
+	if authored := params.AuthoredModel; authored != nil && bindingIndex < len(authored.BackendRefs) {
+		profile.AllowEncryptedReasoningRelay = authored.BackendRefs[bindingIndex].AllowEncryptedReasoningRelay
+	}
 	if err := validateDelegatedProfile(&profile); err != nil {
 		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
 	}

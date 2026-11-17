@@ -297,7 +297,6 @@ func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
 	return map[string]bool{
 		"output.async":  len(item.Async) > 0,
 		"output.caller": len(item.Caller) > 0,
-		"output.phase":  len(item.Phase) > 0,
 		"output.status": item.Status != "" && item.Type != "image_generation_call",
 	}
 }
@@ -367,7 +366,7 @@ func decodeResponsesMessageOutput(
 	if responsesContentFieldPresent(item.Content, "logprobs") {
 		appendProviderFieldOmission(diagnostics, policy, llmprotocol.OpenAIResponsesV1, "output.content.logprobs", "token log probabilities have no protocol-neutral representation")
 	}
-	output.Role, output.Content = role, content
+	output.Role, output.Content, output.ResponsesPhase = role, content, item.Phase
 	return output, nil
 }
 
@@ -554,7 +553,7 @@ func encodeResponsesOutputText(items []llmprotocol.OutputItem) json.RawMessage {
 }
 
 func encodeResponsesOutputItem(item llmprotocol.OutputItem) ([]responsesItemWire, error) {
-	message := llmprotocol.Message{ID: item.ID, Role: item.Role, Content: item.Content}
+	message := llmprotocol.Message{ID: item.ID, Role: item.Role, Content: item.Content, ResponsesPhase: item.ResponsesPhase}
 	return encodeResponsesMessage(message, "output")
 }
 

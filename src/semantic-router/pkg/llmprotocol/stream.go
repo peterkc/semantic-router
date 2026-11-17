@@ -41,6 +41,7 @@ type Event struct {
 	ContentIndex        int
 	ItemID              string
 	Role                Role
+	ResponsesPhase      string `json:",omitempty"`
 	Delta               string
 	ToolCall            *ToolCall
 	Content             *Content

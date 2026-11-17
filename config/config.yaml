@@ -172,6 +172,8 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           weight: 100
+          # Set true only for a trusted Responses backend that can replay OpenAI ciphertext.
+          allow_encrypted_reasoning_relay: false
     - name: gateway-routed-reference
       provider_model_id: gateway-routed-reference
       api_format: chat_completions

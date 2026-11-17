@@ -116,6 +116,7 @@ type Message struct {
 	ID              string
 	Role            Role
 	Content         []Content
+	ResponsesPhase  string `json:",omitempty"` // OpenAI Responses assistant message phase.
 	ReasoningEffort string // Anthropic per-message output_config.effort.
 	Name            string // Chat Completions participant name; formats without one drop it.
 	// WithToolResults marks user content the client sent in the same message
@@ -419,9 +420,10 @@ type TokenLogprobAlternative struct {
 }
 
 type OutputItem struct {
-	ID      string
-	Role    Role
-	Content []Content
+	ID             string
+	Role           Role
+	Content        []Content
+	ResponsesPhase string `json:",omitempty"`
 }
 
 func Int64(value int64) *int64       { return &value }

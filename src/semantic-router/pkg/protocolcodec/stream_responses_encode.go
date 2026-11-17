@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"cmp"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -128,8 +129,10 @@ func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotoco
 		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
 		return frames, err
 	}
-	if event.Content != nil {
-		encoder.encodedKinds[contentKey(event)] = event.Content.Kind
+	if event.Content != nil || event.ResponsesPhase != "" {
+		if event.Content != nil {
+			encoder.encodedKinds[contentKey(event)] = event.Content.Kind
+		}
 		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputMessage)
 		return frames, err
 	}
@@ -153,7 +156,10 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	item := responsesItemWire{Type: string(kind), ID: id, Status: "in_progress"}
 	switch kind {
 	case responsesOutputMessage:
-		item.Role = "assistant"
+		item.Role, item.Phase = "assistant", event.ResponsesPhase
+		if item.Phase != "" {
+			encoder.messagePhases[key] = item.Phase
+		}
 	case responsesOutputTool:
 		item.Type = "function_call"
 		if event.ToolCall != nil {
@@ -617,7 +623,7 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 		return nil, nil, err
 	}
 	index, id := encoder.outputIndexes[outputKey], encoder.outputIDs[outputKey]
-	item, err := marshalCompletedResponsesItem(outputKey, id, parts)
+	item, err := marshalCompletedResponsesItem(outputKey, id, parts, cmp.Or(event.ResponsesPhase, encoder.messagePhases[outputKey]))
 	if err != nil {
 		return nil, nil, err
 	}

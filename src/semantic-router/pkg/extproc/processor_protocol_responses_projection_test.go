@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -111,6 +112,7 @@ func assertResponsesReplayDestination(t *testing.T, body []byte, hosted bool) {
 	} else {
 		require.NotContains(t, string(body), "encrypted_content")
 		require.NotContains(t, string(body), "cipher")
+		require.NotContains(t, string(body), `"include"`)
 		require.Contains(t, string(body), "private thought")
 		require.Contains(t, string(body), "plain-only")
 	}
@@ -149,7 +151,85 @@ func TestResponsesReasoningFallbackProjectsPerCandidate(t *testing.T) {
 	}
 }
 
+const primeResponsesBackend = `version: v0.5
+providers:
+  models:
+    - name: worker
+      api_format: responses
+      backend_refs:
+        - name: gateway
+          provider: openai
+          endpoint: http://127.0.0.1:8000/v1
+%srecipes:
+  - name: default
+`
+
+func TestPrimeResponsesOptInClientReplay(t *testing.T) {
+	server, _, path := newLifecycleTestServer(t)
+	stubPassingReload(t)
+	enabled := strings.Replace(primeResponsesBackend, "%s", "          allow_encrypted_reasoning_relay: true\n", 1)
+	require.NoError(t, os.WriteFile(path, []byte(enabled), 0o600))
+	cfg, err := config.Parse(path)
+	require.NoError(t, err)
+	startup := &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}
+	t.Run("load", func(t *testing.T) { assertPrimeResponsesRelay(t, startup, true) })
+	require.NoError(t, server.reloadRouterFromFile(path))
+	t.Run("reload", func(t *testing.T) {
+		cfg := server.service.GetRouter().Config
+		assertPrimeResponsesRelay(t, &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}, true)
+	})
+	assertResponsesEncryptedOnlyClientReplay(t, startup)
+	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, []byte(responsesReplayInput))
+	require.NoError(t, err)
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		projected, _ := startup.projectResponsesReasoningForBackend(request, "worker", target)
+		encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(target, projected, llmprotocol.Envelope{})
+		require.NoError(t, err)
+		require.NotContains(t, string(encoded.Body), "cipher")
+		require.NotContains(t, string(encoded.Body), `"include"`)
+	}
+}
+
+func TestPrimeResponsesRelayDefaultsOff(t *testing.T) {
+	for _, field := range []string{"", "          allow_encrypted_reasoning_relay: false\n"} {
+		t.Run(strings.TrimSpace(field), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "router.yaml")
+			require.NoError(t, os.WriteFile(path, []byte(strings.Replace(primeResponsesBackend, "%s", field, 1)), 0o600))
+			cfg, err := config.Parse(path)
+			require.NoError(t, err)
+			assertPrimeResponsesRelay(t, &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}, false)
+		})
+	}
+}
+
+func assertPrimeResponsesRelay(t *testing.T, router *OpenAIRouter, want bool) {
+	t.Helper()
+	request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, []byte(strings.Replace(responsesReplayInput, `"id":"rs_1"`, `"id":"rs_1","status":"completed"`, 1)))
+	require.NoError(t, err)
+	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, &request)
+	ctx.ProtocolEnvelope = envelope
+	_, err = router.prepareProviderDispatch(&request, "worker", "", false, ctx)
+	require.NoError(t, err)
+	body, err := router.encodeDispatchRequest(ctx)
+	require.NoError(t, err)
+	assertResponsesReplayDestination(t, body, want)
+	if want {
+		require.Zero(t, droppedFieldCount(ctx.ProtocolDiagnostics, "input[].encrypted_content"))
+		require.Zero(t, droppedFieldCount(ctx.ProtocolDiagnostics, "include"))
+	}
+}
+
 func TestResponsesEncryptedOnlyClientReplay(t *testing.T) {
+	router := routingTestRouter("worker")
+	params := router.Config.ModelConfig["worker"]
+	params.APIFormat = config.APIFormatResponses
+	router.Config.ModelConfig["worker"] = params
+	router.Config.ProviderProfiles["provider"] = config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}
+	assertResponsesEncryptedOnlyClientReplay(t, router)
+}
+
+func assertResponsesEncryptedOnlyClientReplay(t *testing.T, destination *OpenAIRouter) {
+	t.Helper()
 	for _, streamed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "buffered", true: "streamed"}[streamed], func(t *testing.T) {
 			router := &OpenAIRouter{}
@@ -217,16 +297,11 @@ func TestResponsesEncryptedOnlyClientReplay(t *testing.T) {
 			require.NoError(t, err)
 			request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, replay)
 			require.NoError(t, err)
-			router = routingTestRouter("worker")
-			params := router.Config.ModelConfig["worker"]
-			params.APIFormat = config.APIFormatResponses
-			router.Config.ModelConfig["worker"] = params
-			router.Config.ProviderProfiles["provider"] = config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}
 			next := routingTestContext(llmprotocol.OpenAIResponsesV1, &request)
 			next.ProtocolEnvelope = envelope
-			_, err = router.prepareProviderDispatch(&request, "worker", "", false, next)
+			_, err = destination.prepareProviderDispatch(&request, "worker", "", false, next)
 			require.NoError(t, err)
-			body, err := router.encodeDispatchRequest(next)
+			body, err := destination.encodeDispatchRequest(next)
 			require.NoError(t, err)
 			require.Contains(t, string(body), `"encrypted_content":"cipher_A"`)
 			require.Contains(t, string(body), `"content":[]`)
@@ -315,7 +390,7 @@ func TestResponsesMixedEndpointPoolDropsBlob(t *testing.T) {
 	router := routingTestRouter("worker")
 	params := router.Config.ModelConfig["worker"]
 	params.APIFormat = config.APIFormatResponses
-	router.Config.ProviderProfiles["provider"] = config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}
+	router.Config.ProviderProfiles["provider"] = config.ProviderProfile{Type: "openai", BaseURL: "http://127.0.0.1:8000/v1", AllowEncryptedReasoningRelay: true}
 	router.Config.ProviderProfiles["gateway"] = config.ProviderProfile{Type: "openai", BaseURL: "https://gateway.example.org/v1"}
 	gateway := router.Config.VLLMEndpoints[0]
 	gateway.Name, gateway.ProviderProfileName = "gateway", "gateway"

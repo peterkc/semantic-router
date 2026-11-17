@@ -76,6 +76,7 @@ type responsesStreamEncoder struct {
 	streamState
 	outputIndexes          map[responsesOutputKey]int
 	outputIDs              map[responsesOutputKey]string
+	messagePhases          map[responsesOutputKey]string
 	outputStarted          map[responsesOutputKey]bool
 	toolArgumentsEmitted   map[int]int
 	itemOutputKeys         map[int][]responsesOutputKey
@@ -116,6 +117,7 @@ func (OpenAIResponsesCodec) NewEncoder(context llmprotocol.StreamContext, policy
 		streamState:            streamState{context: context, policy: policy},
 		outputIndexes:          make(map[responsesOutputKey]int),
 		outputIDs:              make(map[responsesOutputKey]string),
+		messagePhases:          make(map[responsesOutputKey]string),
 		outputStarted:          make(map[responsesOutputKey]bool),
 		toolArgumentsEmitted:   make(map[int]int),
 		itemOutputKeys:         make(map[int][]responsesOutputKey),
