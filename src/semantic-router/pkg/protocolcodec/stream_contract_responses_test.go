@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -590,5 +594,89 @@ func TestResponsesStreamDropsChatGPTModerationMetadata(t *testing.T) {
 		if !slices.ContainsFunc(diagnostics, func(d llmprotocol.Diagnostic) bool { return d.Field == "stream.response.metadata" }) {
 			t.Fatalf("%s: the dropped metadata was not reported: %+v", target, diagnostics)
 		}
+	}
+}
+
+func TestResponsesStreamSkipsUnsequencedVendorDiagnostics(t *testing.T) {
+	wire, err := os.ReadFile("testdata/responses-reasoning-parts.sse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, completed, found := strings.Cut(string(wire), "event: response.completed")
+	if !found {
+		t.Fatal("fixture lacks response.completed")
+	}
+	completed = "event: response.completed" + completed
+	const vendor = "event: responsesapi.websocket_timing\ndata: {\"type\":\"responsesapi.websocket_timing\"}\n\n"
+	want, _, err := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1).Push(wire)
+	if err != nil || len(want) == 0 || want[len(want)-1].Type != llmprotocol.EventResponseCompleted {
+		t.Fatalf("fixture did not complete: %v, events: %+v", err, want)
+	}
+	for name, chunks := range map[string][]string{
+		"single":             {before + vendor + completed},
+		"split and repeated": {before + vendor[:len(vendor)/2], vendor[len(vendor)/2:] + vendor + completed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			decoder := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1)
+			var got []llmprotocol.Event
+			var vendor llmprotocol.Diagnostics
+			for _, chunk := range chunks {
+				events, diagnostics, err := decoder.Push([]byte(chunk))
+				if err != nil {
+					t.Fatal(err)
+				}
+				got = append(got, events...)
+				for _, diagnostic := range diagnostics {
+					if diagnostic.Field == "stream.vendor_event" {
+						vendor = append(vendor, diagnostic)
+					}
+				}
+			}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Fatalf("decoded events differ from the stream without diagnostics (-want +got):\n%s", diff)
+			}
+			if len(vendor) != 1 || vendor[0].Action != llmprotocol.DiagnosticDropped {
+				t.Fatalf("want one dropped stream.vendor_event diagnostic per stream, got %+v", vendor)
+			}
+		})
+	}
+	t.Run("sequence reuse", func(t *testing.T) {
+		decoder := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1)
+		_, _, err := decoder.Push([]byte(before + vendor + strings.Replace(completed, `"sequence_number":17`, `"sequence_number":16`, 1)))
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_sequence_order")
+	})
+	t.Run("after terminal", func(t *testing.T) {
+		decoder := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1)
+		_, _, err := decoder.Push([]byte(string(wire) + vendor))
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_event_after_terminal")
+	})
+	t.Run("conformance rejects", func(t *testing.T) {
+		policy := llmprotocol.DefaultPolicy()
+		policy.RejectUnknownUpstreamFields = true
+		decoder := OpenAIResponsesCodec{}.NewDecoder(llmprotocol.StreamContext{Context: context.Background()}, policy)
+		_, _, err := decoder.Push([]byte(before + vendor + completed))
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "missing_stream_sequence")
+	})
+}
+
+func TestResponsesStreamVendorSequenceBoundaries(t *testing.T) {
+	for _, event := range []string{"response.output_text.delta", "error"} {
+		t.Run(event, func(t *testing.T) {
+			_, _, err := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1).Push([]byte("event: " + event + "\ndata: {}\n\n"))
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "missing_stream_sequence")
+		})
+	}
+	decoder := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1)
+	_, _, err := decoder.Push([]byte("event: responsesapi.websocket_timing\ndata: {\"sequence_number\":0}\n\n"))
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unknown_stream_event")
+	// An SSE event name that disagrees with the JSON type is never dropped as a vendor event.
+	for name, frame := range map[string]string{
+		"official name over vendor type": "event: response.output_text.delta\ndata: {\"type\":\"responsesapi.websocket_timing\"}\n\n",
+		"vendor name over official type": "event: responsesapi.websocket_timing\ndata: {\"type\":\"response.output_text.delta\"}\n\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, err := newProviderStreamDecoder(llmprotocol.OpenAIResponsesV1).Push([]byte(frame))
+			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_event_type_mismatch")
+		})
 	}
 }

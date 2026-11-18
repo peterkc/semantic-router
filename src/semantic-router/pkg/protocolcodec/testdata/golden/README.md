@@ -77,7 +77,9 @@ after the HTTP body reaches a clean end-of-stream; malformed trailing bytes can
 therefore never escape behind an already-visible success sentinel. Responses streams
 also reject missing or non-contiguous `sequence_number` values, a non-zero
 initial sequence, null/non-integer/overflowed sequence values, and the
-Chat Completions-only `[DONE]` sentinel. Stream response and model identities
+Chat Completions-only `[DONE]` sentinel. A vendor event outside the `response.*`
+and `error` families that carries no `sequence_number` is dropped with a
+`stream.vendor_event` diagnostic instead; the conformance policy rejects it. Stream response and model identities
 are immutable after the first provider event for all three protocols. Exact
 allowed values and one-step-outside boundary cases cover
 sampling probabilities, penalties, candidate counts, stop sequences, output

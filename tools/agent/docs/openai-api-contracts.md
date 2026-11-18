@@ -276,7 +276,7 @@ during transport refactors:
 | Parallel tool streams | Each call retains an independent identity, argument buffer, lifecycle, and compact target index even when deltas interleave or items finish out of order |
 | Hosted image generation | Every published Responses option, tool choice, output item, and progress event is typed; result presence, progress order, partial indexes, item identity, and terminal state are validated, while unsupported targets fail explicitly |
 | Retained Responses tools | `previous_response_id` materializes the complete stored call/result/reasoning sequence through the neutral codec before provider encoding; missing history and orphaned stored results fail closed |
-| Responses stream ordering | Every event carries a contiguous `sequence_number`; an official response terminal is final and `[DONE]` is rejected as a Chat-only sentinel |
+| Responses stream ordering | Every `response.*` and `error` event carries a contiguous `sequence_number`; a vendor event outside those families without one is dropped with a `stream.vendor_event` diagnostic, and the conformance policy rejects it; an official response terminal is final and `[DONE]` is rejected as a Chat-only sentinel |
 | Custom tools | Unsupported custom or freeform tool discriminators fail before inference and are never coerced into function calls |
 | Stream usage | intermediate evidence cannot terminate content or create duplicate usage events; backend accounting cannot change public `include_usage` behavior |
 | Incomplete streams | every client format receives one failure terminal and never a success terminal |

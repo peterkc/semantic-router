@@ -237,6 +237,16 @@ func (decoder *responsesStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Responses stream emitted data after its terminal event")
 	}
+	// Some gateways add vendor diagnostics, such as codex-lb's
+	// responsesapi.websocket_timing, without a sequence number. The router drops
+	// and reports them, as it does unknown members; conformance still rejects them.
+	if dropUnknownUpstreamFields(decoder.policy) && isUnsequencedVendorEvent(parsed.Data, parsed.Event, decoder.policy) {
+		var dropped, diagnostics llmprotocol.Diagnostics
+		appendProviderFieldOmission(&dropped, decoder.policy, llmprotocol.OpenAIResponsesV1,
+			"stream.vendor_event", "vendor stream event outside the Responses contract carries no sequence number")
+		decoder.appendProviderFieldsOnce(&diagnostics, dropped)
+		return nil, diagnostics, nil
+	}
 	eventType, err := decoder.validateResponsesFrameEnvelope(parsed.Data, parsed.Event)
 	if err != nil {
 		return nil, nil, err
@@ -472,6 +482,17 @@ func (decoder *responsesStreamDecoder) requireResponsesActiveItem(index int, ite
 		return invalidProviderResponse("stream_item_id_mismatch", "Responses item_id does not match output_index")
 	}
 	return nil
+}
+
+// isUnsequencedVendorEvent reports a frame outside the response.* and error
+// families without a sequence_number. A frame that mentions sequence_number
+// anywhere, or whose type cannot be read, takes the normal envelope checks.
+func isUnsequencedVendorEvent(body []byte, eventName string, policy llmprotocol.Policy) bool {
+	if bytes.Contains(body, []byte(`"sequence_number"`)) {
+		return false
+	}
+	eventType, err := decodeProviderEventType(body, eventName, policy)
+	return err == nil && !strings.HasPrefix(eventType, "response.") && eventType != "error"
 }
 
 func decodeResponsesStreamSequence(body []byte) (uint64, error) {
