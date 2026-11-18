@@ -22,7 +22,7 @@ providers:
         family: gpt-6-astra
       backend_refs:
         - name: codex-lb
-          provider: openai-compatible
+          provider: openai
           allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
@@ -35,7 +35,7 @@ providers:
         family: gpt-6-astra
       backend_refs:
         - name: codex-lb
-          provider: openai-compatible
+          provider: openai
           allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
@@ -48,7 +48,7 @@ providers:
         family: gpt-6-astra
       backend_refs:
         - name: codex-lb
-          provider: openai-compatible
+          provider: openai
           allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
