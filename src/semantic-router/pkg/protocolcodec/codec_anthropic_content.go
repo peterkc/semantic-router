@@ -905,16 +905,13 @@ func appendAnthropicMediaOmissions(diagnostics *llmprotocol.Diagnostics, content
 
 // Other codecs cannot carry Anthropic's opaque continuation data. Reject it
 // before target capability checks or lossy projections change the diagnostic.
-func rejectRedactedContent(target llmprotocol.WireFormat, blocks []llmprotocol.Content) error {
-	if target == llmprotocol.AnthropicMessagesV1 {
-		return nil
-	}
+func rejectRedactedContent(blocks []llmprotocol.Content) error {
 	for _, block := range blocks {
 		if block.Kind == llmprotocol.ContentRedactedThinking {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 		}
 		if block.ToolResult != nil {
-			if err := rejectRedactedContent(target, block.ToolResult.Content); err != nil {
+			if err := rejectRedactedContent(block.ToolResult.Content); err != nil {
 				return err
 			}
 		}
@@ -922,16 +919,30 @@ func rejectRedactedContent(target llmprotocol.WireFormat, blocks []llmprotocol.C
 	return nil
 }
 func rejectRedactedRequest(target llmprotocol.WireFormat, request llmprotocol.Request) error {
+	if target == llmprotocol.AnthropicMessagesV1 {
+		return nil
+	}
 	for _, m := range request.Messages {
-		if err := rejectRedactedContent(target, m.Content); err != nil {
+		if err := rejectRedactedContent(m.Content); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 func rejectRedactedResponse(target llmprotocol.WireFormat, response llmprotocol.Response) error {
-	for _, item := range response.Output {
-		if err := rejectRedactedContent(target, item.Content); err != nil {
+	if target == llmprotocol.AnthropicMessagesV1 {
+		return nil
+	}
+	for _, alt := range response.Alternatives {
+		if err := rejectRedactedOutput(alt); err != nil {
+			return err
+		}
+	}
+	return rejectRedactedOutput(response.Output)
+}
+func rejectRedactedOutput(output []llmprotocol.OutputItem) error {
+	for _, item := range output {
+		if err := rejectRedactedContent(item.Content); err != nil {
 			return err
 		}
 	}

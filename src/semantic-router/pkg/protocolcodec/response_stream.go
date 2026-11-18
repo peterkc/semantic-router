@@ -18,6 +18,9 @@ func (engine *Engine) EncodeResponseStream(
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return nil, nil, err
 	}
+	if err := rejectRedactedResponse(format, response); err != nil {
+		return nil, nil, err
+	}
 	if len(response.Alternatives) != 0 {
 		return nil, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
@@ -140,7 +143,7 @@ func groupResponseStreamContent(contents []llmprotocol.Content) []responseStream
 	groups := make([]responseStreamContentGroup, 0, len(contents))
 	for _, content := range contents {
 		family := responseStreamContentFamily(content.Kind)
-		if family == llmprotocol.ContentToolCall || len(groups) == 0 || groups[len(groups)-1].family != family {
+		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentRedactedThinking || len(groups) == 0 || groups[len(groups)-1].family != family {
 			groups = append(groups, responseStreamContentGroup{family: family})
 		}
 		groups[len(groups)-1].contents = append(groups[len(groups)-1].contents, content)
@@ -175,6 +178,10 @@ func neutralContentGroupEvents(
 	completed := started
 	completed.Type = llmprotocol.EventOutputItemCompleted
 	completed.StopReason = context.response.StopReason
+	if group.family == llmprotocol.ContentRedactedThinking {
+		started.Content = &group.contents[0]
+		return []llmprotocol.Event{started, completed}, nil
+	}
 	if group.family == llmprotocol.ContentToolCall {
 		if len(group.contents) != 1 {
 			return nil, llmprotocol.NewError(

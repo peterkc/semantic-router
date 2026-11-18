@@ -187,7 +187,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	if err := rejectRedactedRequest(target, request); err != nil {
-		return RequestResult{Request: request, Envelope: envelope}, err
+		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
 	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
@@ -229,7 +229,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	if err := rejectRedactedResponse(target, response); err != nil {
-		return ResponseResult{Response: response, Envelope: envelope}, err
+		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
 	if !engine.carriesMatchedStopSequence(target) {
 		diagnostics = appendDiagnostics(diagnostics,

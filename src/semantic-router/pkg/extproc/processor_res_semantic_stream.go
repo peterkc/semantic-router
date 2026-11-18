@@ -36,6 +36,7 @@ type semanticResponseStreamState struct {
 }
 
 type semanticStreamItem struct {
+	redactedData     string
 	id               string
 	role             llmprotocol.Role
 	text             string
@@ -388,6 +389,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				call := *event.ToolCall
 				item.toolCall = &call
 			}
+			if event.Content != nil && event.Content.Kind == llmprotocol.ContentRedactedThinking {
+				item.redactedData = event.Content.Data
+			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
 			}
@@ -506,6 +510,9 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 				Kind: llmprotocol.ContentReasoning, Text: item.reasoning,
 				Signature: item.reasoningSig,
 			})
+		}
+		if item.redactedData != "" {
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentRedactedThinking, Data: item.redactedData})
 		}
 		if item.refusal != "" {
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: item.refusal})

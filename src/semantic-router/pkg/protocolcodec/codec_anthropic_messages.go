@@ -361,6 +361,9 @@ func decodeAnthropicSystem(raw json.RawMessage, request *llmprotocol.Request, po
 	if err != nil {
 		return err
 	}
+	if err := rejectRedactedContent(contents); err != nil {
+		return err
+	}
 	request.Instructions = []llmprotocol.InstructionBlock{{Role: llmprotocol.RoleSystem, Content: contents}}
 	return nil
 }

@@ -117,10 +117,75 @@ func TestAnthropicRedactedBoundaries(t *testing.T) {
 	require.Equal(t, `{"model":"backend","messages":[{"role":"assistant","content":[{"signature":"signed","thinking":"thought","type":"thinking"},{"text":"answer","type":"text"}]},{"role":"user","content":[{"text":"next","type":"text"}]}],"max_tokens":16}`, string(result.Body))
 	_, _, _, err = engine.DecodeRequest(messagesFormat, []byte(strings.Replace(redactedRequest, `,"data":"opaque+/="`, "", 1)))
 	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_content_variant")
+	req, env, _, err := engine.DecodeRequest(messagesFormat, []byte(redactedRequest))
+	require.NoError(t, err)
+	reply, replyEnv, _, err := engine.DecodeResponse(messagesFormat, []byte(redactedResponse))
+	require.NoError(t, err)
+	nested := `{"model":"m","max_tokens":16,"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"lookup","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"redacted_thinking","data":"hidden"}]}]}]}`
+	sys := `{"model":"m","max_tokens":16,"system":[{"type":"redacted_thinking","data":"hidden"}],"messages":[{"role":"user","content":"hello"}]}`
+	for _, target := range []llmprotocol.WireFormat{messagesFormat, llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIImagesV1} {
+		t.Run("system/"+string(target), func(t *testing.T) {
+			_, err := engine.TranslateRequest(messagesFormat, target, []byte(sys), nil)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
+	}
+	t.Run("emptyStreamData", func(t *testing.T) {
+		_, _, err := engine.DecodeResponseStream(messagesFormat, []byte(strings.Replace(redactedStream, `"opaque+/="`, `""`, 1)), llmprotocol.StreamContext{Context: t.Context()})
+		assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_response_content")
+	})
+	for name, invalid := range map[string]llmprotocol.Content{"emptyData": {}, "text": {Data: "x", Text: "extra"}, "signature": {Data: "x", Signature: "extra"}} {
+		t.Run(name, func(t *testing.T) {
+			original := req.Messages[0].Content[1]
+			defer func() { req.Messages[0].Content[1] = original }()
+			invalid.Kind = llmprotocol.ContentRedactedThinking
+			req.Messages[0].Content[1] = invalid
+			assertProtocolError(t, llmprotocol.ValidateRequest(req, llmprotocol.DefaultPolicy().Limits), llmprotocol.ErrorInvalidRequest, "invalid_redacted_thinking")
+		})
+	}
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIImagesV1} {
+		t.Run("encodeRequest/"+string(target), func(t *testing.T) {
+			_, err := engine.EncodeRequest(target, req, env)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
+		t.Run("encodeResponse/"+string(target), func(t *testing.T) {
+			_, err := engine.EncodeResponse(target, reply, replyEnv)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
+		t.Run("nested/"+string(target), func(t *testing.T) {
+			_, err := engine.TranslateRequest(messagesFormat, target, []byte(nested), nil)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
+		t.Run("alternatives/"+string(target), func(t *testing.T) {
+			alt := reply
+			alt.Alternatives = [][]llmprotocol.OutputItem{reply.Output}
+			alt.Output = []llmprotocol.OutputItem{{ID: "first", Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "first"}}}}
+			_, err := engine.EncodeResponse(target, alt, replyEnv)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
+		t.Run("encodeStream/"+string(target), func(t *testing.T) {
+			_, _, err := engine.EncodeResponseStream(target, reply, llmprotocol.StreamContext{Context: t.Context()})
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+		})
 		_, err := engine.TranslateRequest(messagesFormat, target, []byte(redactedRequest), nil)
 		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
 		_, err = engine.TranslateResponse(messagesFormat, target, []byte(redactedResponse), nil)
 		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
 	}
+}
+
+func TestAnthropicRedactedSyntheticStream(t *testing.T) {
+	engine := NewBuiltinEngine()
+	ctx := llmprotocol.StreamContext{Context: t.Context(), PublicModel: "m"}
+	body := strings.Replace(redactedResponse, `"data":"opaque+/="}`, `"data":"one"},{"type":"redacted_thinking","data":"two"}`, 1)
+	reply, _, _, err := engine.DecodeResponse(messagesFormat, []byte(body))
+	require.NoError(t, err)
+	wire, _, err := engine.EncodeResponseStream(messagesFormat, reply, ctx)
+	require.NoError(t, err)
+	got, _, err := engine.DecodeResponseStream(messagesFormat, wire, ctx)
+	require.NoError(t, err)
+	var contents []llmprotocol.Content
+	for _, item := range got.Output {
+		contents = append(contents, item.Content...)
+	}
+	require.Equal(t, reply.Output[0].Content, contents)
 }
