@@ -23,6 +23,7 @@ providers:
       backend_refs:
         - name: codex-lb
           provider: openai-compatible
+          allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
     - name: gpt-6.2-astra
@@ -35,6 +36,7 @@ providers:
       backend_refs:
         - name: codex-lb
           provider: openai-compatible
+          allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
     - name: gpt-6-luna
@@ -47,6 +49,7 @@ providers:
       backend_refs:
         - name: codex-lb
           provider: openai-compatible
+          allow_encrypted_reasoning_relay: true
           endpoint: "${CODEX_LB_BASE_URL}"
           api_key: "${CODEX_LB_API_KEY}"
     - name: claude-opus-5-5
