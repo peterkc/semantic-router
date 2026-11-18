@@ -122,6 +122,7 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 			"tool_use": {"caller", "id", "input", "name", "toolset_name", "type"},
 		}
 	}
+	allowedByType["redacted_thinking"] = []string{"type", "data"}
 	allowed, recognized := allowedByType[typeName]
 	if !recognized {
 		return nil
@@ -138,11 +139,12 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 
 func requireAnthropicContentFields(object map[string]json.RawMessage, typeName string, providerOutput bool) error {
 	requiredByType := map[string][]string{
-		"text":     {"text"},
-		"thinking": {"thinking"},
-		"image":    {"source"},
-		"document": {"source"},
-		"tool_use": {"id", "input", "name"},
+		"redacted_thinking": {"data"},
+		"text":              {"text"},
+		"thinking":          {"thinking"},
+		"image":             {"source"},
+		"document":          {"source"},
+		"tool_use":          {"id", "input", "name"},
 		// content is optional for tool_result, matching the official SDK
 		// contract: only type and tool_use_id are required. Omitted content
 		// decodes to an empty tool result.
@@ -215,10 +217,8 @@ func anthropicRequestContentType(body json.RawMessage) (string, error) {
 		return "", err
 	}
 	switch typeName {
-	case "text", "thinking", "image", "document", "tool_use", "tool_result":
+	case "text", "thinking", "image", "document", "tool_use", "tool_result", "redacted_thinking":
 		return typeName, nil
-	case "redacted_thinking":
-		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 	default:
 		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic content type is unsupported", nil)
 	}
@@ -230,10 +230,8 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 		return "", err
 	}
 	switch typeName {
-	case "text", "thinking", "tool_use":
+	case "text", "thinking", "tool_use", "redacted_thinking":
 		return typeName, nil
-	case "redacted_thinking":
-		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
 	default:
 		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic response content type is unsupported", nil)
 	}
@@ -302,6 +300,8 @@ func decodeAnthropicTypedContent(
 	switch typeName {
 	case "text":
 		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: block.Text, Cache: decodeAnthropicCacheControl(block.CacheControl)}, nil
+	case "redacted_thinking":
+		return llmprotocol.Content{Kind: llmprotocol.ContentRedactedThinking, Data: block.Data}, nil
 	case "thinking":
 		if block.CacheControl != nil {
 			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to thinking content", nil)
@@ -793,6 +793,8 @@ func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentW
 	switch content.Kind {
 	case llmprotocol.ContentText:
 		return anthropicContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
+	case llmprotocol.ContentRedactedThinking:
+		return anthropicContentWire{Type: "redacted_thinking", Data: content.Data}, nil
 	case llmprotocol.ContentReasoning:
 		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{content}); err != nil {
 			return anthropicContentWire{}, err
@@ -899,4 +901,39 @@ func appendAnthropicMediaOmissions(diagnostics *llmprotocol.Diagnostics, content
 	if content.Kind == llmprotocol.ContentFile && content.Filename != "" {
 		appendProviderFieldOmission(diagnostics, policy, source, "content.file.filename", "Messages documents have no file name")
 	}
+}
+
+// Other codecs cannot carry Anthropic's opaque continuation data. Reject it
+// before target capability checks or lossy projections change the diagnostic.
+func rejectRedactedContent(target llmprotocol.WireFormat, blocks []llmprotocol.Content) error {
+	if target == llmprotocol.AnthropicMessagesV1 {
+		return nil
+	}
+	for _, block := range blocks {
+		if block.Kind == llmprotocol.ContentRedactedThinking {
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning", "redacted reasoning cannot be translated", nil)
+		}
+		if block.ToolResult != nil {
+			if err := rejectRedactedContent(target, block.ToolResult.Content); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+func rejectRedactedRequest(target llmprotocol.WireFormat, request llmprotocol.Request) error {
+	for _, m := range request.Messages {
+		if err := rejectRedactedContent(target, m.Content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func rejectRedactedResponse(target llmprotocol.WireFormat, response llmprotocol.Response) error {
+	for _, item := range response.Output {
+		if err := rejectRedactedContent(target, item.Content); err != nil {
+			return err
+		}
+	}
+	return nil
 }

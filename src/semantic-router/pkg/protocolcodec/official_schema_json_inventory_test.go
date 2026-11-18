@@ -197,6 +197,8 @@ func TestOfficialAnthropicStreamUnionsHaveHumanReadableJSONEvidence(t *testing.T
 	for _, discriminator := range officialUnsupportedAnthropicStreamDeltas {
 		wantUnsupported = append(wantUnsupported, "content_delta:"+discriminator)
 	}
+	// The fixture also checks this native block is rejected by other targets.
+	wantUnsupported = append(wantUnsupported, "content_block:redacted_thinking")
 	sort.Strings(wantUnsupported)
 
 	unsupported := make([]string, 0, len(capability.Cases))

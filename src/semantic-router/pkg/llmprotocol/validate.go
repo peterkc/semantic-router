@@ -670,6 +670,13 @@ func validateContentBlock(content Content, blocks *int, limits Limits, depth int
 		return err
 	}
 	switch content.Kind {
+	case ContentRedactedThinking:
+		data := content.Data
+		content.Data = ""
+		if data == "" || content.Text != "" || content.Cache != nil || len(content.Citations) != 0 || hasNonTextFields(content) {
+			return NewError(ErrorInvalidRequest, "invalid_redacted_thinking", "redacted thinking requires opaque data only", nil)
+		}
+		return ValidateTextCitations(data, nil, limits)
 	case ContentText, ContentRefusal, ContentReasoning:
 		return validateTextContent(content, limits)
 	case ContentImage, ContentAudio, ContentVideo, ContentFile:

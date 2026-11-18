@@ -213,7 +213,7 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 		}
 		return events, diagnostics, err
 	case "content_block_start":
-		return decoder.emitDecodedAnthropicEvent(decodeAnthropicContentStart(wire))
+		return decoder.emitDecodedAnthropicEvent(decoder.decodeAnthropicContentStart(wire))
 	case "content_block_delta":
 		return decoder.emitDecodedAnthropicEvent(decodeAnthropicContentDelta(wire))
 	case "content_block_stop":
@@ -357,7 +357,7 @@ func (decoder *anthropicStreamDecoder) emitAnthropicEvent(
 	return []llmprotocol.Event{normalized}, nil, nil
 }
 
-func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, error) {
+func (decoder *anthropicStreamDecoder) decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, error) {
 	event := llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: anthropicEventIndex(wire), Role: llmprotocol.RoleAssistant}
 	if wire.ContentBlock == nil {
 		return event, nil
@@ -369,6 +369,14 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 	switch wire.ContentBlock.Type {
 	case "tool_use":
 		event.ToolCall = &llmprotocol.ToolCall{ID: wire.ContentBlock.ID, Name: wire.ContentBlock.Name, Arguments: string(wire.ContentBlock.Input)}
+	case "redacted_thinking":
+		if decoder.context.Target != llmprotocol.AnthropicMessagesV1 {
+			return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic stream content block is unsupported", nil)
+		}
+		if wire.ContentBlock.Data == "" {
+			return llmprotocol.Event{}, invalidProviderResponse("invalid_response_content", "Anthropic redacted thinking requires data")
+		}
+		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentRedactedThinking, Data: wire.ContentBlock.Data}
 	case "thinking":
 		event.Content = &llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Signature: wire.ContentBlock.Signature,
@@ -741,6 +749,8 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 	switch kind {
 	case llmprotocol.ContentToolCall:
 		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
+	case llmprotocol.ContentRedactedThinking:
+		block.Type, block.Data = "redacted_thinking", event.Content.Data
 	case llmprotocol.ContentReasoning:
 		signature := ""
 		if event.Content != nil {

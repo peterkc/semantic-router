@@ -120,6 +120,9 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope}, err
 	}
+	if err := rejectRedactedRequest(format, request); err != nil {
+		return RequestResult{Request: request, Envelope: envelope}, err
+	}
 	projected, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, format)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, format)
 	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, verbosityDiagnostics, engine.policy.Limits.Diagnostics)
@@ -139,6 +142,9 @@ func (engine *Engine) EncodeResponse(format llmprotocol.WireFormat, response llm
 		return ResponseResult{Response: response, Envelope: envelope}, encodeResponseErr
 	}
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
+		return ResponseResult{Response: response, Envelope: envelope}, err
+	}
+	if err := rejectRedactedResponse(format, response); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope}, err
 	}
 	diagnostics := projectReasoningContinuity(envelope.Format, format, pair.buffered.Capabilities(), &response)
@@ -180,6 +186,9 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
+	if err := rejectRedactedRequest(target, request); err != nil {
+		return RequestResult{Request: request, Envelope: envelope}, err
+	}
 	request, projectionDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(request, target)
 	diagnostics = appendDiagnostics(diagnostics, projectionDiagnostics, engine.policy.Limits.Diagnostics)
 	request, projectionDiagnostics = llmprotocol.ProjectTextVerbosity(request, target)
@@ -218,6 +227,9 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	}
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
+	}
+	if err := rejectRedactedResponse(target, response); err != nil {
+		return ResponseResult{Response: response, Envelope: envelope}, err
 	}
 	if !engine.carriesMatchedStopSequence(target) {
 		diagnostics = appendDiagnostics(diagnostics,

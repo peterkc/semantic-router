@@ -58,6 +58,8 @@ const (
 	ContentToolCall   ContentKind = "tool_call"
 	ContentToolResult ContentKind = "tool_result"
 	ContentReasoning  ContentKind = "reasoning"
+	// ContentRedactedThinking holds opaque Anthropic continuation data.
+	ContentRedactedThinking ContentKind = "redacted_thinking"
 	// ContentGeneratedImage represents one image-generation operation and its
 	// result. It is intentionally distinct from ContentImage: the latter is an
 	// image supplied as model input, while this kind preserves the lifecycle of
