@@ -1,9 +1,11 @@
 package extproc
 
 import (
-	"github.com/stretchr/testify/require"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestSemanticStreamKeepsRedactedThinking(t *testing.T) {

@@ -8,13 +8,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-const redactedBlocks = `[{"type":"thinking","thinking":"thought","signature":"signed"},{"type":"redacted_thinking","data":"opaque+/="},{"type":"text","text":"answer"}]`
-const redactedRequest = `{"model":"m","max_tokens":16,"messages":[{"role":"assistant","content":` + redactedBlocks + `},{"role":"user","content":"next"}]}`
-const redactedResponse = `{"id":"msg_1","type":"message","role":"assistant","model":"m","content":` + redactedBlocks + `,"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":3}}`
-const messagesFormat = llmprotocol.AnthropicMessagesV1
+const (
+	redactedBlocks   = `[{"type":"thinking","thinking":"thought","signature":"signed"},{"type":"redacted_thinking","data":"opaque+/="},{"type":"text","text":"answer"}]`
+	redactedRequest  = `{"model":"m","max_tokens":16,"messages":[{"role":"assistant","content":` + redactedBlocks + `},{"role":"user","content":"next"}]}`
+	redactedResponse = `{"id":"msg_1","type":"message","role":"assistant","model":"m","content":` + redactedBlocks + `,"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":3}}`
+	messagesFormat   = llmprotocol.AnthropicMessagesV1
+)
 
 func TestAnthropicRedactedRequest(t *testing.T) {
 	result, err := NewBuiltinEngine().TranslateRequest(messagesFormat, messagesFormat, []byte(redactedRequest), func(r *llmprotocol.Request) error { r.Model = "backend"; return nil })
@@ -188,4 +191,16 @@ func TestAnthropicRedactedSyntheticStream(t *testing.T) {
 		contents = append(contents, item.Content...)
 	}
 	require.Equal(t, reply.Output[0].Content, contents)
+}
+
+func TestAnthropicRedactedRequestRetainsDecodeDiagnostic(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.AllowedLossyFields = []string{llmprotocol.LossyFieldToolDeferLoading}
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	require.NoError(t, err)
+	body := strings.Replace(redactedRequest, `"messages":`, `"tools":[{"name":"lookup","input_schema":{"type":"object"},"defer_loading":true}],"messages":`, 1)
+	result, err := engine.TranslateRequest(messagesFormat, llmprotocol.OpenAIChatV1, []byte(body), nil)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "redacted_reasoning")
+	require.Len(t, result.Diagnostics, 1)
+	require.Equal(t, llmprotocol.LossyFieldToolDeferLoading, result.Diagnostics[0].Field)
 }

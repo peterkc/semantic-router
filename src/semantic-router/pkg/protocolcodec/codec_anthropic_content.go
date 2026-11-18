@@ -918,6 +918,7 @@ func rejectRedactedContent(blocks []llmprotocol.Content) error {
 	}
 	return nil
 }
+
 func rejectRedactedRequest(target llmprotocol.WireFormat, request llmprotocol.Request) error {
 	if target == llmprotocol.AnthropicMessagesV1 {
 		return nil
@@ -929,6 +930,7 @@ func rejectRedactedRequest(target llmprotocol.WireFormat, request llmprotocol.Re
 	}
 	return nil
 }
+
 func rejectRedactedResponse(target llmprotocol.WireFormat, response llmprotocol.Response) error {
 	if target == llmprotocol.AnthropicMessagesV1 {
 		return nil
@@ -940,6 +942,7 @@ func rejectRedactedResponse(target llmprotocol.WireFormat, response llmprotocol.
 	}
 	return rejectRedactedOutput(response.Output)
 }
+
 func rejectRedactedOutput(output []llmprotocol.OutputItem) error {
 	for _, item := range output {
 		if err := rejectRedactedContent(item.Content); err != nil {
