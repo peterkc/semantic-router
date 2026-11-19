@@ -238,6 +238,13 @@ global:
           api_key_env: LIQUID_API_KEY
         timeout_ms: 3000
   router:
+    # Prime's beads extension adds a <beads_context> block as a later user
+    # message (after the task on a session's first turn). Score the task, not
+    # the block; the request sent to the model is unchanged.
+    routing_input:
+      strip_blocks:
+        - start: '<beads_context>'
+          end: '</beads_context>'
     learning:
       enabled: false
       protection:
